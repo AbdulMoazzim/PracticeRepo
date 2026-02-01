@@ -1,0 +1,244 @@
+{% extends "generator/base.html" %} 
+{% load static %}
+
+{% block title %}CertifyHub{% endblock %}
+
+{% block content %}
+  <style>
+    body {
+      background-size: cover;
+      background-position: center;
+      justify-content: center;
+      overflow-y: auto;
+    }
+
+    .container {
+      margin-top: 50px;
+      margin-bottom: 50px;
+      background: rgba(0, 0, 0, 0.4);
+      padding: 40px;
+      border-radius: 20px;
+      box-shadow: 0 8px 16px rgba(0,0,0,0.1);
+      text-align: center;
+      max-width: 900px;
+      width: 100%;
+      animation: scrollUpIn 1s ease-out;
+      max-height: none;
+      overflow: visible;
+    }
+
+    h2 {
+      font-size: 32px;
+      font-weight: 600;
+      margin-bottom: 20px;
+    }
+
+    #instruction {
+      font-size: 20px;
+      margin-bottom: 20px;
+    }
+    .glow-box {
+      background: #1a1a1a;
+      color: white;
+      border: none;
+      border-radius: 10px;
+      padding: 12px 20px;
+      text-align: center;
+      font-weight: bold;
+      box-shadow: 0 0 0 rgba(0, 255, 255, 0); /* Initially no glow */
+      transition: transform 0.2s ease, box-shadow 0.3s ease;
+    }
+
+    .glow-box:hover {
+      transform: translateY(-4px); /* Pop upward */
+      box-shadow: 0 0 20px rgba(173, 216, 230, 0.9);
+      cursor: pointer;
+    }
+    .glow-container {
+      background: #1a1a1a;
+      padding: 15px;
+      border-radius: 10px;
+      box-shadow: 0 0 15px 5px rgba(173, 216, 230, 0.6);
+      margin-bottom: 20px;
+      transition: box-shadow 0.3s ease;
+    }
+
+
+    canvas {
+      border: 2px dashed #7ba4ce;
+      border-radius: 12px;
+      cursor: crosshair;
+      max-width: 100%;
+      height: auto;
+    }
+
+    button {
+      margin-top: 30px;
+      padding: 12px 24px;
+      font-size: 16px;
+      font-weight: 500;
+      background-color: #666;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background 0.3s ease;
+      display: none;
+    }
+
+    button:hover {
+      background-color: #888;
+    }
+
+    input[type="hidden"] {
+      display: none;
+    }
+
+    @media (max-width: 768px) {
+      h2 {
+        font-size: 26px;
+      }
+
+      #instruction {
+        font-size: 18px;
+      }
+    }
+
+    /* Scroll animation */
+    @keyframes scrollUpIn {
+      from {
+        transform: translateY(100%);
+        opacity: 0;
+      }
+      to {
+        transform: translateY(0);
+        opacity: 1;
+      }
+    }
+
+    @keyframes scrollUpOut {
+      from {
+        transform: translateY(0);
+        opacity: 1;
+      }
+      to {
+        transform: translateY(-100%);
+        opacity: 0;
+      }
+    }
+
+    .scroll-up-out {
+      animation: scrollUpOut 0.8s ease-in forwards;
+    }
+  </style>
+</head>
+<body>
+  <div class="container glow-container" id="mapContainer">
+    <h2>Certificate Customization</h2>
+
+    <div id="instruction">
+      Drag to select area for: <strong><span id="currentField">Name</span></strong>
+    </div>
+
+    <canvas id="templateCanvas"></canvas>
+
+    <form method="POST" id="mapForm">
+      {% csrf_token %}
+      <input type="hidden" name="coordinates" id="coordinatesField">
+      <button class="glow-box" type="submit" id="submitBtn">Submit Coordinates</button>
+    </form>
+  </div>
+
+  <script>
+    const fields = JSON.parse('{{ headers|escapejs }}');
+    let currentIndex = 0;
+    let coords = {};
+
+    const canvas = document.getElementById("templateCanvas");
+    const ctx = canvas.getContext("2d");
+    const image = new Image();
+    image.src = "{{ template_url }}";
+
+    const currentField = document.getElementById("currentField");
+    const coordsField = document.getElementById("coordinatesField");
+    const submitBtn = document.getElementById("submitBtn");
+    const form = document.getElementById("mapForm");
+    const container = document.getElementById("mapContainer");
+
+    let isDrawing = false, startX = 0, startY = 0;
+
+    function getMousePos(canvas, evt) {
+      const rect = canvas.getBoundingClientRect();
+      const scaleX = canvas.width / rect.width;
+      const scaleY = canvas.height / rect.height;
+      return {
+        x: (evt.clientX - rect.left) * scaleX,
+        y: (evt.clientY - rect.top) * scaleY
+      };
+    }
+
+    image.onload = function () {
+      canvas.width = image.width;
+      canvas.height = image.height;
+      ctx.drawImage(image, 0, 0);
+      currentField.innerText = fields[currentIndex];
+    };
+
+    canvas.addEventListener("mousedown", function (e) {
+      isDrawing = true;
+      const pos = getMousePos(canvas, e);
+      startX = pos.x;
+      startY = pos.y;
+    });
+
+    canvas.addEventListener("mousemove", function (e) {
+      if (!isDrawing) return;
+      const pos = getMousePos(canvas, e);
+      const width = pos.x - startX;
+      const height = pos.y - startY;
+
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(image, 0, 0);
+      ctx.strokeStyle = "#00ffcc";
+      ctx.lineWidth = 2;
+      ctx.strokeRect(startX, startY, width, height);
+    });
+
+    canvas.addEventListener("mouseup", function (e) {
+      isDrawing = false;
+      const pos = getMousePos(canvas, e);
+
+      const x = Math.min(startX, pos.x);
+      const y = Math.min(startY, pos.y);
+      const width = Math.abs(pos.x - startX);
+      const height = Math.abs(pos.y - startY);
+
+      coords[fields[currentIndex]] = {
+        x: x,
+        y: y,
+        width: Math.round(width),
+        height: Math.round(height),
+        default_font_size: Math.round(height)
+      };
+
+      if (currentIndex < fields.length - 1) {
+        currentIndex++;
+        currentField.innerText = fields[currentIndex];
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(image, 0, 0);
+      } else {
+        document.getElementById("instruction").innerHTML = "✅ All fields selected!";
+        coordsField.value = JSON.stringify(coords);
+        submitBtn.style.display = "inline-block";
+      }
+    });
+
+    form.addEventListener("submit", function (e) {
+      e.preventDefault();
+      container.classList.add("scroll-up-out");
+      setTimeout(() => {
+        form.submit();
+      }, 800);
+    });
+  </script>
+{% endblock %}
